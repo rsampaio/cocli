@@ -168,3 +168,45 @@ func Test_ComidCreateCmd_InvalidProfile(t *testing.T) {
 	err = cmd.Execute()
 	assert.EqualError(t, err, "1/1 creations(s) failed")
 }
+
+const comidWithDependencyTriplesTemplate = `{
+  "tag-identity": {"id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"},
+  "triples": {
+    "reference-values": [
+      {
+        "environment": {
+          "class": {
+            "id": {"type": "uuid", "value": "DD6661F0-0928-4401-966B-589EA74E3272"},
+            "model": "FMC",
+            "layer": 0,
+            "index": 0
+          }
+        },
+        "measurements": [{"value": {"digests": ["sha-256:RKozavTLFKh5Qy5T3WVxx/qbzK+3X0iCWSYtbqOk2Rs="]}}]
+      }
+    ],
+    "dependency-triples": [
+      {
+        "subject": {"type": "uuid", "value": "DD6661F0-0928-4401-966B-589EA74E3272"},
+        "dependents": [
+          {"type": "uuid", "value": "FFDA7CF3-2333-4A91-99A8-068626203ACA"},
+          {"type": "text", "value": "downstream-domain"}
+        ]
+      }
+    ]
+  }
+}`
+
+func Test_ComidCreateCmd_template_with_dependency_triples(t *testing.T) {
+	cmd := NewComidCreateCmd()
+	fs = afero.NewMemMapFs()
+	err := afero.WriteFile(fs, "with-dep-triples.json", []byte(comidWithDependencyTriplesTemplate), 0644)
+	require.NoError(t, err)
+
+	cmd.SetArgs([]string{"--template=with-dep-triples.json"})
+	err = cmd.Execute()
+	assert.NoError(t, err)
+
+	_, err = fs.Stat("with-dep-triples.cbor")
+	assert.NoError(t, err)
+}
