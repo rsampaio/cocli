@@ -56,4 +56,4 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-replace github.com/veraison/corim => github.com/rsampaio/corim v0.0.0-20260218211858-18d1526aa490
+replace github.com/veraison/corim => ../corim

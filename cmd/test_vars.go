@@ -74,4 +74,33 @@ var (
 
 	//go:embed testcases/test-cots.cbor
 	testCots []byte
+
+	// CoMID JSON template with dependency-triples (draft-9: domain-id + trustees).
+	comidWithDependencyTriplesTemplate = []byte(`{
+  "tag-identity": {"id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"},
+  "triples": {
+    "reference-values": [
+      {
+        "environment": {
+          "class": {
+            "id": {"type": "uuid", "value": "DD6661F0-0928-4401-966B-589EA74E3272"},
+            "model": "FMC",
+            "layer": 0,
+            "index": 0
+          }
+        },
+        "measurements": [{"value": {"digests": ["sha-256:RKozavTLFKh5Qy5T3WVxx/qbzK+3X0iCWSYtbqOk2Rs="]}}]
+      }
+    ],
+    "dependency-triples": [
+      {
+        "domain-id": {"class": {"id": {"type": "uuid", "value": "DD6661F0-0928-4401-966B-589EA74E3272"}}},
+        "trustees": [
+          {"class": {"id": {"type": "uuid", "value": "FFDA7CF3-2333-4A91-99A8-068626203ACA"}}},
+          {"class": {"id": {"type": "uuid", "value": "AAAAAAAA-2333-4A91-99A8-068626203ACA"}}}
+        ]
+      }
+    ]
+  }
+}`)
 )
