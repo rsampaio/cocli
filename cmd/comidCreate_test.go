@@ -4,11 +4,14 @@
 package cmd
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/spf13/afero"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/veraison/corim/comid"
 	"github.com/veraison/corim/profiles/tdx"
 )
 
@@ -169,36 +172,70 @@ func Test_ComidCreateCmd_InvalidProfile(t *testing.T) {
 	assert.EqualError(t, err, "1/1 creations(s) failed")
 }
 
-// minimalValidComidTemplate is a minimal valid CoMID JSON (tag-identity + one reference-value).
-const minimalValidComidTemplate = `{
+// Test_ComidCreateCmd_template_with_dependency_triples checks that:
+// 1) A CoMID template containing draft-9 dependency-triples (domain-id + trustees) can be
+//    loaded from data/comid/templates and encoded to CBOR without error.
+// 2) The generated CBOR round-trips and contains the expected dependency-triples.
+func Test_ComidCreateCmd_template_with_dependency_triples(t *testing.T) {
+	templatePath := filepath.Join("..", "data", "comid", "templates", "comid-with-dependency-triples.json")
+	if _, err := os.Stat(templatePath); err != nil {
+		t.Skipf("template not found: %s", templatePath)
+	}
+
+	cmd := NewComidCreateCmd()
+	fs = afero.NewOsFs()
+	outDir := t.TempDir()
+	cborPath := filepath.Join(outDir, "comid-with-dependency-triples.cbor")
+
+	cmd.SetArgs([]string{"--template=" + templatePath, "--output-dir=" + outDir})
+	err := cmd.Execute()
+	require.NoError(t, err)
+
+	_, err = os.Stat(cborPath)
+	require.NoError(t, err, "output CBOR file should exist")
+
+	// Round-trip: decode CBOR and assert dependency-triples are present and valid.
+	cborData, err := os.ReadFile(cborPath)
+	require.NoError(t, err)
+	var c comid.Comid
+	err = c.FromCBOR(cborData)
+	require.NoError(t, err)
+	require.NotNil(t, c.Triples, "triples should be set")
+	require.NotNil(t, c.Triples.DomainDependencies, "dependency-triples should be set")
+	require.False(t, c.Triples.DomainDependencies.IsEmpty(), "dependency-triples should not be empty")
+	dd := *c.Triples.DomainDependencies
+	require.Len(t, dd, 1, "template has one dependency-triple")
+	assert.GreaterOrEqual(t, len(dd[0].Trustees), 1, "triple should have at least one trustee")
+	err = dd[0].Valid()
+	assert.NoError(t, err)
+}
+
+// Test_ComidCreateCmd_template_with_invalid_dependency_triples checks that creation fails
+// when the template has invalid dependency-triples (e.g. empty trustees).
+func Test_ComidCreateCmd_template_with_invalid_dependency_triples(t *testing.T) {
+	invalidTemplate := `{
   "tag-identity": {"id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"},
   "triples": {
     "reference-values": [
       {
-        "environment": {
-          "class": {
-            "id": {"type": "uuid", "value": "DD6661F0-0928-4401-966B-589EA74E3272"},
-            "model": "FMC",
-            "layer": 0,
-            "index": 0
-          }
-        },
+        "environment": {"class": {"id": {"type": "uuid", "value": "DD6661F0-0928-4401-966B-589EA74E3272"}}},
         "measurements": [{"value": {"digests": ["sha-256:RKozavTLFKh5Qy5T3WVxx/qbzK+3X0iCWSYtbqOk2Rs="]}}]
+      }
+    ],
+    "dependency-triples": [
+      {
+        "domain-id": {"class": {"id": {"type": "uuid", "value": "DD6661F0-0928-4401-966B-589EA74E3272"}}},
+        "trustees": []
       }
     ]
   }
 }`
-
-func Test_ComidCreateCmd_template_with_dependency_triples(t *testing.T) {
 	cmd := NewComidCreateCmd()
 	fs = afero.NewMemMapFs()
-	err := afero.WriteFile(fs, "with-dep-triples.json", comidWithDependencyTriplesTemplate, 0644)
-	require.NoError(t, err)
+	require.NoError(t, afero.WriteFile(fs, "bad.json", []byte(invalidTemplate), 0644))
 
-	cmd.SetArgs([]string{"--template=with-dep-triples.json"})
-	err = cmd.Execute()
-	assert.NoError(t, err)
-
-	_, err = fs.Stat("with-dep-triples.cbor")
-	assert.NoError(t, err)
+	cmd.SetArgs([]string{"--template=bad.json"})
+	err := cmd.Execute()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "failed")
 }
